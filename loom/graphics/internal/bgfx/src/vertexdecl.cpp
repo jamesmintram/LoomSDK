@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2013 Branimir Karadzic. All rights reserved.
+ * Copyright 2011-2014 Branimir Karadzic. All rights reserved.
  * License: http://www.opensource.org/licenses/BSD-2-Clause
  */
 
@@ -8,7 +8,9 @@
 #include <bx/hash.h>
 #include <bx/uint32_t.h>
 #include <bx/string.h>
+#include <bx/readerwriter.h>
 
+#include "config.h"
 #include "vertexdecl.h"
 
 namespace bgfx
@@ -21,7 +23,7 @@ namespace bgfx
 		{  4,  8, 12, 16 },
 	};
 
-	static const uint8_t s_attribTypeSizeDx11[AttribType::Count][4] =
+	static const uint8_t s_attribTypeSizeDx1x[AttribType::Count][4] =
 	{
 		{  1,  2,  4,  4 },
 		{  2,  4,  8,  8 },
@@ -37,23 +39,29 @@ namespace bgfx
 		{  4,  8, 12, 16 },
 	};
 
-	static const uint8_t (*s_attribTypeSize[RendererType::Count])[AttribType::Count][4] =
+	static const uint8_t (*s_attribTypeSize[])[AttribType::Count][4] =
 	{
 #if BGFX_CONFIG_RENDERER_DIRECT3D9
 		&s_attribTypeSizeDx9,
-#elif BGFX_CONFIG_RENDERER_DIRECT3D11
-		&s_attribTypeSizeDx11,
-#elif BGFX_CONFIG_RENDERER_OPENGL|BGFX_CONFIG_RENDERER_OPENGLES2|BGFX_CONFIG_RENDERER_OPENGLES3
+#elif BGFX_CONFIG_RENDERER_DIRECT3D11 || BGFX_CONFIG_RENDERER_DIRECT3D12
+		&s_attribTypeSizeDx1x,
+#elif BGFX_CONFIG_RENDERER_OPENGL || BGFX_CONFIG_RENDERER_OPENGLES
 		&s_attribTypeSizeGl,
 #else
 		&s_attribTypeSizeDx9,
 #endif // BGFX_CONFIG_RENDERER_
-		&s_attribTypeSizeDx9,
-		&s_attribTypeSizeDx11,
-		&s_attribTypeSizeGl,
-		&s_attribTypeSizeGl,
-		&s_attribTypeSizeGl,
+		&s_attribTypeSizeDx9,  // Direct3D9
+		&s_attribTypeSizeDx1x, // Direct3D11
+		&s_attribTypeSizeDx1x, // Direct3D12
+		&s_attribTypeSizeGl,   // OpenGLES
+		&s_attribTypeSizeGl,   // OpenGL
 	};
+	BX_STATIC_ASSERT(BX_COUNTOF(s_attribTypeSize) == bgfx::RendererType::Count);
+
+	void initAttribTypeSizeTable(RendererType::Enum _type)
+	{
+		s_attribTypeSize[0] = s_attribTypeSize[_type];
+	}
 
 	void dbgPrintfVargs(const char* _format, va_list _argList)
 	{
@@ -77,45 +85,67 @@ namespace bgfx
 		va_end(argList);
 	}
 
-	void VertexDecl::begin(RendererType::Enum _renderer)
+	VertexDecl::VertexDecl()
+	{
+		// BK - struct need to have ctor to qualify as non-POD data.
+		// Need this to catch programming errors when serializing struct.
+	}
+
+	VertexDecl& VertexDecl::begin(RendererType::Enum _renderer)
 	{
 		m_hash = _renderer; // use hash to store renderer type while building VertexDecl.
 		m_stride = 0;
 		memset(m_attributes, 0xff, sizeof(m_attributes) );
 		memset(m_offset, 0, sizeof(m_offset) );
+
+		return *this;
 	}
 
 	void VertexDecl::end()
 	{
-		m_hash = bx::hashMurmur2A(m_attributes);
+		bx::HashMurmur2A murmur;
+		murmur.begin();
+		murmur.add(m_attributes, sizeof(m_attributes) );
+		murmur.add(m_offset, sizeof(m_offset) );
+		m_hash = murmur.end();
 	}
 
-	void VertexDecl::add(Attrib::Enum _attrib, uint8_t _num, AttribType::Enum _type, bool _normalized, bool _asInt)
+	VertexDecl& VertexDecl::add(Attrib::Enum _attrib, uint8_t _num, AttribType::Enum _type, bool _normalized, bool _asInt)
 	{
 		const uint8_t encodedNorm = (_normalized&1)<<6;
 		const uint8_t encodedType = (_type&3)<<3;
-		const uint8_t encodedNum = (_num-1)&3;
+		const uint8_t encodedNum  = (_num-1)&3;
 		const uint8_t encodeAsInt = (_asInt&(!!"\x1\x1\x0\x0"[_type]) )<<7;
-
 		m_attributes[_attrib] = encodedNorm|encodedType|encodedNum|encodeAsInt;
+
 		m_offset[_attrib] = m_stride;
 		m_stride += (*s_attribTypeSize[m_hash])[_type][_num-1];
+
+		return *this;
+	}
+
+	VertexDecl& VertexDecl::skip(uint8_t _num)
+	{
+		m_stride += _num;
+
+		return *this;
 	}
 
 	void VertexDecl::decode(Attrib::Enum _attrib, uint8_t& _num, AttribType::Enum& _type, bool& _normalized, bool& _asInt) const
 	{
 		uint8_t val = m_attributes[_attrib];
-		_num = (val&3)+1;
-		_type = AttribType::Enum((val>>3)&3);
+		_num        = (val&3)+1;
+		_type       = AttribType::Enum((val>>3)&3);
 		_normalized = !!(val&(1<<6) );
-		_asInt = !!(val&(1<<7) );
+		_asInt      = !!(val&(1<<7) );
 	}
 
-	static const char* s_attrName[Attrib::Count] = 
+	static const char* s_attrName[] = 
 	{
 		"Attrib::Position",
 		"Attrib::Normal",
 		"Attrib::Tangent",
+		"Attrib::Bitangent",
 		"Attrib::Color0",
 		"Attrib::Color1",
 		"Attrib::Indices",
@@ -129,6 +159,7 @@ namespace bgfx
 		"Attrib::TexCoord6",
 		"Attrib::TexCoord7",
 	};
+	BX_STATIC_ASSERT(BX_COUNTOF(s_attrName) == Attrib::Count);
 
 	const char* getAttribName(Attrib::Enum _attr)
 	{
@@ -137,12 +168,135 @@ namespace bgfx
 
 	void dump(const VertexDecl& _decl)
 	{
-#if BGFX_CONFIG_DEBUG
-		dbgPrintf("vertexdecl %08x (%08x), stride %d\n"
-			, _decl.m_hash
-			, bx::hashMurmur2A(_decl.m_attributes)
-			, _decl.m_stride
-			);
+		if (BX_ENABLED(BGFX_CONFIG_DEBUG) )
+		{
+			dbgPrintf("vertexdecl %08x (%08x), stride %d\n"
+				, _decl.m_hash
+				, bx::hashMurmur2A(_decl.m_attributes)
+				, _decl.m_stride
+				);
+
+			for (uint32_t attr = 0; attr < Attrib::Count; ++attr)
+			{
+				if (0xff != _decl.m_attributes[attr])
+				{
+					uint8_t num;
+					AttribType::Enum type;
+					bool normalized;
+					bool asInt;
+					_decl.decode(Attrib::Enum(attr), num, type, normalized, asInt);
+
+					dbgPrintf("\tattr %d - %s, num %d, type %d, norm %d, asint %d, offset %d\n"
+						, attr
+						, getAttribName(Attrib::Enum(attr) )
+						, num
+						, type
+						, normalized
+						, asInt
+						, _decl.m_offset[attr]
+					);
+				}
+			}
+		}
+	}
+
+	struct AttribToId
+	{
+		Attrib::Enum attr;
+		uint16_t id;
+	};
+
+	static AttribToId s_attribToId[] =
+	{
+		// NOTICE:
+		// Attrib must be in order how it appears in Attrib::Enum! id is
+		// unique and should not be changed if new Attribs are added.
+		{ Attrib::Position,  0x0001 },
+		{ Attrib::Normal,    0x0002 },
+		{ Attrib::Tangent,   0x0003 },
+		{ Attrib::Bitangent, 0x0004 },
+		{ Attrib::Color0,    0x0005 },
+		{ Attrib::Color1,    0x0006 },
+		{ Attrib::Indices,   0x000e },
+		{ Attrib::Weight,    0x000f },
+		{ Attrib::TexCoord0, 0x0010 },
+		{ Attrib::TexCoord1, 0x0011 },
+		{ Attrib::TexCoord2, 0x0012 },
+		{ Attrib::TexCoord3, 0x0013 },
+		{ Attrib::TexCoord4, 0x0014 },
+		{ Attrib::TexCoord5, 0x0015 },
+		{ Attrib::TexCoord6, 0x0016 },
+		{ Attrib::TexCoord7, 0x0017 },
+	};
+	BX_STATIC_ASSERT(BX_COUNTOF(s_attribToId) == Attrib::Count);
+
+	Attrib::Enum idToAttrib(uint16_t id)
+	{
+		for (uint32_t ii = 0; ii < BX_COUNTOF(s_attribToId); ++ii)
+		{
+			if (s_attribToId[ii].id == id)
+			{
+				return s_attribToId[ii].attr;
+			}
+		}
+
+		return Attrib::Count;
+	}
+
+	uint16_t attribToId(Attrib::Enum _attr)
+	{
+		return s_attribToId[_attr].id;
+	}
+
+	struct AttribTypeToId
+	{
+		AttribType::Enum type;
+		uint16_t id;
+	};
+
+	static AttribTypeToId s_attribTypeToId[] =
+	{
+		// NOTICE:
+		// AttribType must be in order how it appears in AttribType::Enum!
+		// id is unique and should not be changed if new AttribTypes are
+		// added.
+		{ AttribType::Uint8, 0x0001 },
+		{ AttribType::Int16, 0x0002 },
+		{ AttribType::Half,  0x0003 },
+		{ AttribType::Float, 0x0004 },
+	};
+	BX_STATIC_ASSERT(BX_COUNTOF(s_attribTypeToId) == AttribType::Count);
+
+	AttribType::Enum idToAttribType(uint16_t id)
+	{
+		for (uint32_t ii = 0; ii < BX_COUNTOF(s_attribTypeToId); ++ii)
+		{
+			if (s_attribTypeToId[ii].id == id)
+			{
+				return s_attribTypeToId[ii].type;
+			}
+		}
+
+		return AttribType::Count;
+	}
+
+	uint16_t attribTypeToId(AttribType::Enum _attr)
+	{
+		return s_attribTypeToId[_attr].id;
+	}
+
+	int32_t write(bx::WriterI* _writer, const VertexDecl& _decl)
+	{
+		int32_t total = 0;
+		uint8_t numAttrs = 0;
+
+		for (uint32_t attr = 0; attr < Attrib::Count; ++attr)
+		{
+			numAttrs += 0xff == _decl.m_attributes[attr] ? 0 : 1;
+		}
+
+		total += bx::write(_writer, numAttrs);
+		total += bx::write(_writer, _decl.m_stride);
 
 		for (uint32_t attr = 0; attr < Attrib::Count; ++attr)
 		{
@@ -153,21 +307,64 @@ namespace bgfx
 				bool normalized;
 				bool asInt;
 				_decl.decode(Attrib::Enum(attr), num, type, normalized, asInt);
-
-				dbgPrintf("\tattr %d - %s, num %d, type %d, norm %d, asint %d, offset %d\n"
-					, attr
-					, getAttribName(Attrib::Enum(attr) )
-					, num
-					, type
-					, normalized
-					, asInt
-					, _decl.m_offset[attr]
-				);
+				total += bx::write(_writer, _decl.m_offset[attr]);
+				total += bx::write(_writer, s_attribToId[attr].id);
+				total += bx::write(_writer, num);
+				total += bx::write(_writer, s_attribTypeToId[type].id);
+				total += bx::write(_writer, normalized);
+				total += bx::write(_writer, asInt);
 			}
 		}
-#else
-		BX_UNUSED(_decl);
-#endif // BGFX_CONFIG_DEBUG
+
+		return total;
+	}
+
+	int32_t read(bx::ReaderI* _reader, VertexDecl& _decl)
+	{
+		int32_t total = 0;
+
+		uint8_t numAttrs;
+		total += bx::read(_reader, numAttrs);
+
+		uint16_t stride;
+		total += bx::read(_reader, stride);
+
+		_decl.begin();
+
+		for (uint32_t ii = 0; ii < numAttrs; ++ii)
+		{
+			uint16_t offset;
+			total += bx::read(_reader, offset);
+
+			uint16_t attribId = 0;
+			total += bx::read(_reader, attribId);
+
+			uint8_t num;
+			total += bx::read(_reader, num);
+
+			uint16_t attribTypeId;
+			total += bx::read(_reader, attribTypeId);
+
+			bool normalized;
+			total += bx::read(_reader, normalized);
+
+			bool asInt;
+			total += bx::read(_reader, asInt);
+
+			Attrib::Enum     attr = idToAttrib(attribId);
+			AttribType::Enum type = idToAttribType(attribTypeId);
+			if (Attrib::Count != attr
+			&&  AttribType::Count != type)
+			{
+				_decl.add(attr, num, type, normalized, asInt);
+				_decl.m_offset[attr] = offset;
+			}
+		}
+
+		_decl.end();
+		_decl.m_stride = stride;
+
+		return total;
 	}
 
 	void vertexPack(const float _input[4], bool _inputNormalized, Attrib::Enum _attr, const VertexDecl& _decl, void* _data, uint32_t _index)
@@ -483,4 +680,97 @@ namespace bgfx
 		}
 	}
 
+	inline float sqLength(const float _a[3], const float _b[3])
+	{
+		const float xx = _a[0] - _b[0];
+		const float yy = _a[1] - _b[1];
+		const float zz = _a[2] - _b[2];
+		return xx*xx + yy*yy + zz*zz;
+	}
+
+	uint16_t weldVerticesRef(uint16_t* _output, const VertexDecl& _decl, const void* _data, uint16_t _num, float _epsilon)
+	{
+		// Brute force slow vertex welding...
+		const float epsilonSq = _epsilon*_epsilon;
+
+		uint32_t numVertices = 0;
+		memset(_output, 0xff, _num*sizeof(uint16_t) );
+
+		for (uint32_t ii = 0; ii < _num; ++ii)
+		{
+			if (UINT16_MAX != _output[ii])
+			{
+				continue;
+			}
+
+			_output[ii] = (uint16_t)ii;
+			++numVertices;
+
+			float pos[4];
+			vertexUnpack(pos, Attrib::Position, _decl, _data, ii);
+
+			for (uint32_t jj = 0; jj < _num; ++jj)
+			{
+				if (UINT16_MAX != _output[jj])
+				{
+					continue;
+				}
+
+				float test[4];
+				vertexUnpack(test, Attrib::Position, _decl, _data, jj);
+
+				if (sqLength(test, pos) < epsilonSq)
+				{
+					_output[jj] = (uint16_t)ii;
+				}
+			}
+		}
+
+		return (uint16_t)numVertices;
+	}
+
+	uint16_t weldVertices(uint16_t* _output, const VertexDecl& _decl, const void* _data, uint16_t _num, float _epsilon)
+	{
+		const uint32_t hashSize = bx::uint32_nextpow2(_num);
+		const uint32_t hashMask = hashSize-1;
+		const float epsilonSq = _epsilon*_epsilon;
+
+		uint32_t numVertices = 0;
+
+		const uint32_t size = sizeof(uint16_t)*(hashSize + _num);
+		uint16_t* hashTable = (uint16_t*)alloca(size);
+		memset(hashTable, 0xff, size);
+
+		uint16_t* next = hashTable + hashSize;
+
+		for (uint32_t ii = 0; ii < _num; ++ii)
+		{
+			float pos[4];
+			vertexUnpack(pos, Attrib::Position, _decl, _data, ii);
+			uint32_t hashValue = bx::hashMurmur2A(pos, 3*sizeof(float) ) & hashMask;
+
+			uint16_t offset = hashTable[hashValue];
+			for (; UINT16_MAX != offset; offset = next[offset])
+			{
+				float test[4];
+				vertexUnpack(test, Attrib::Position, _decl, _data, _output[offset]);
+
+				if (sqLength(test, pos) < epsilonSq)
+				{
+					_output[ii] = _output[offset];
+					break;
+				}
+			}
+
+			if (UINT16_MAX == offset)
+			{
+				_output[ii] = (uint16_t)ii;
+				next[ii] = hashTable[hashValue];
+				hashTable[hashValue] = (uint16_t)ii;
+				numVertices++;
+			}
+		}
+
+		return (uint16_t)numVertices;
+	}
 } // namespace bgfx

@@ -30,7 +30,7 @@ else
 end
 
 # If 1, then we link against LuaJIT. If 0, we use classic Lua VM.
-$doBuildJIT=1
+$doBuildJIT=0
 
 # Whether or not to include Admob and/or Facebook in the build... for Great Apple Compliance!
 $doBuildAdmob=1

@@ -3,14 +3,20 @@
  * License: http://www.opensource.org/licenses/BSD-2-Clause
  */
 
-#ifndef __BX_THREAD_H__
-#define __BX_THREAD_H__
+#ifndef BX_THREAD_H_HEADER_GUARD
+#define BX_THREAD_H_HEADER_GUARD
 
 #if BX_PLATFORM_POSIX
 #	include <pthread.h>
-#endif // BX_PLATFORM_POSIX
+#elif BX_PLATFORM_WINRT
+using namespace Platform;
+using namespace Windows::Foundation;
+using namespace Windows::System::Threading;
+#endif
 
 #include "sem.h"
+
+#if BX_CONFIG_SUPPORTS_THREADING
 
 namespace bx
 {
@@ -18,11 +24,14 @@ namespace bx
 
 	class Thread
 	{
-		BX_CLASS_NO_COPY_NO_ASSIGNMENT(Thread);
+		BX_CLASS(Thread
+			, NO_COPY
+			, NO_ASSIGNMENT
+			);
 
 	public:
 		Thread()
-#if BX_PLATFORM_WINDOWS|BX_PLATFORM_XBOX360
+#if BX_PLATFORM_WINDOWS|BX_PLATFORM_XBOX360|BX_PLATFORM_WINRT
 			: m_handle(INVALID_HANDLE_VALUE)
 #elif BX_PLATFORM_POSIX
 			: m_handle(0)
@@ -60,6 +69,15 @@ namespace bx
 				, 0
 				, NULL
 				);
+#elif BX_PLATFORM_WINRT
+            m_handle = CreateEventEx(nullptr, nullptr, CREATE_EVENT_MANUAL_RESET, EVENT_ALL_ACCESS);
+            auto workItemHandler = ref new WorkItemHandler([=](IAsyncAction^)
+            {
+                m_exitCode = threadFunc(this);
+                SetEvent(m_handle);
+            }, CallbackContext::Any);
+
+            ThreadPool::RunAsync(workItemHandler, WorkItemPriority::Normal, WorkItemOptions::TimeSliced);
 #elif BX_PLATFORM_POSIX
 			int result;
 			BX_UNUSED(result);
@@ -94,6 +112,10 @@ namespace bx
 			GetExitCodeThread(m_handle, (DWORD*)&m_exitCode);
 			CloseHandle(m_handle);
 			m_handle = INVALID_HANDLE_VALUE;
+#elif BX_PLATFORM_WINRT
+            WaitForSingleObjectEx(m_handle, INFINITE, FALSE);
+            CloseHandle(m_handle);
+            m_handle = INVALID_HANDLE_VALUE;
 #elif BX_PLATFORM_POSIX
 			union
 			{
@@ -112,6 +134,11 @@ namespace bx
 			return m_running;
 		}
 
+		int32_t getExitCode() const
+		{
+			return m_exitCode;
+		}
+
 	private:
 		int32_t entry()
 		{
@@ -119,7 +146,7 @@ namespace bx
 			return m_fn(m_userData);
 		}
 
-#if BX_PLATFORM_WINDOWS|BX_PLATFORM_XBOX360
+#if BX_PLATFORM_WINDOWS|BX_PLATFORM_XBOX360|BX_PLATFORM_WINRT
 		static DWORD WINAPI threadFunc(LPVOID _arg)
 		{
 			Thread* thread = (Thread*)_arg;
@@ -140,7 +167,7 @@ namespace bx
 		}
 #endif // BX_PLATFORM_
 
-#if BX_PLATFORM_WINDOWS|BX_PLATFORM_XBOX360
+#if BX_PLATFORM_WINDOWS|BX_PLATFORM_XBOX360|BX_PLATFORM_WINRT
 		HANDLE m_handle;
 #elif BX_PLATFORM_POSIX
 		pthread_t m_handle;
@@ -154,6 +181,71 @@ namespace bx
 		bool m_running;
 	};
 
+#if BX_PLATFORM_WINDOWS
+	class TlsData
+	{
+	public:
+		TlsData()
+		{
+			m_id = TlsAlloc();
+			BX_CHECK(TLS_OUT_OF_INDEXES != m_id, "Failed to allocated TLS index (err: 0x%08x).", GetLastError() );
+		}
+
+		~TlsData()
+		{
+			BOOL result = TlsFree(m_id);
+			BX_CHECK(0 != result, "Failed to free TLS index (err: 0x%08x).", GetLastError() ); BX_UNUSED(result);
+		}
+
+		void* get() const
+		{
+			return TlsGetValue(m_id);
+		}
+
+		void set(void* _ptr)
+		{
+			TlsSetValue(m_id, _ptr);
+		}
+
+	private:
+		uint32_t m_id;
+	};
+
+#elif !(BX_PLATFORM_WINRT)
+
+	class TlsData
+	{
+	public:
+		TlsData()
+		{
+			int result = pthread_key_create(&m_id, NULL);
+			BX_CHECK(0 == result, "pthread_key_create failed %d.", result); BX_UNUSED(result);
+		}
+
+		~TlsData()
+		{
+			int result = pthread_key_delete(m_id);
+			BX_CHECK(0 == result, "pthread_key_delete failed %d.", result); BX_UNUSED(result);
+		}
+
+		void* get() const
+		{
+			return pthread_getspecific(m_id);
+		}
+
+		void set(void* _ptr)
+		{
+			int result = pthread_setspecific(m_id, _ptr);
+			BX_CHECK(0 == result, "pthread_setspecific failed %d.", result); BX_UNUSED(result);
+		}
+
+	private:
+		pthread_key_t m_id;
+	};
+#endif // BX_PLATFORM_WINDOWS
+
 } // namespace bx
 
-#endif // __BX_THREAD_H__
+#endif // BX_CONFIG_SUPPORTS_THREADING
+
+#endif // BX_THREAD_H_HEADER_GUARD

@@ -13,13 +13,25 @@ if (NOT ANDROID)
     include_directories( ${LOOMBGFX_INCLUDE_DIR}/glext )
     endif()
 
-set ( BGFX_SRC ${LOOMBGFX_SOURCE_DIR}/bgfx.cpp ${LOOMBGFX_SOURCE_DIR}/dds.cpp ${LOOMBGFX_SOURCE_DIR}/vertexdecl.cpp ${LOOMBGFX_SOURCE_DIR}/image.cpp )
+set ( BGFX_SRC  ${LOOMBGFX_SOURCE_DIR}/bgfx.cpp 
+                ${LOOMBGFX_SOURCE_DIR}/vertexdecl.cpp 
+                ${LOOMBGFX_SOURCE_DIR}/image.cpp
+
+                ${LOOMBGFX_SOURCE_DIR}/renderer_gl.cpp
+                ${LOOMBGFX_SOURCE_DIR}/renderer_d3d9.cpp
+                ${LOOMBGFX_SOURCE_DIR}/renderer_d3d11.cpp
+                ${LOOMBGFX_SOURCE_DIR}/renderer_d3d12.cpp
+                ${LOOMBGFX_SOURCE_DIR}/renderer_null.cpp
+
+                ${LOOMBGFX_SOURCE_DIR}/renderdoc.cpp
+                 )
+#set ( BGFX_SRC ${LOOMBGFX_SOURCE_DIR}/bgfx.cpp ${LOOMBGFX_SOURCE_DIR}/dds.cpp ${LOOMBGFX_SOURCE_DIR}/vertexdecl.cpp ${LOOMBGFX_SOURCE_DIR}/image.cpp )
 
 if(APPLE)
 
     add_definitions( -U__STRICT_ANSI__ -Wfatal-errors -Wunused-value )
 
-    set ( BGFX_SRC ${BGFX_SRC} ${LOOMBGFX_SOURCE_DIR}/renderer_gl.cpp )
+    #set ( BGFX_SRC ${BGFX_SRC} ${LOOMBGFX_SOURCE_DIR}/renderer_gl.cpp )
 
 
     if(LOOM_BUILD_IOS EQUAL 1)
@@ -33,6 +45,7 @@ if(APPLE)
     else()
         # OSX
         set ( GRAPHICS_SRC ${GRAPHICS_SRC} gfxGraphicsOSX.mm )
+
         add_definitions( -DBGFX_CONFIG_RENDERER_OPENGL=1 -msse2 )
         include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/internal/bx/include/compat/osx )
         set ( BGFX_SRC ${BGFX_SRC} ${LOOMBGFX_SOURCE_DIR}/glcontext_external.cpp )
@@ -50,7 +63,7 @@ endif()
 
 if (MSVC)
         # add_definitions(-DBGFX_CONFIG_RENDERER_OPENGL=1)
-        set ( BGFX_SRC ${BGFX_SRC} ${LOOMBGFX_SOURCE_DIR}/renderer_d3d9.cpp )
+        #set ( BGFX_SRC ${BGFX_SRC} ${LOOMBGFX_SOURCE_DIR}/renderer_d3d9.cpp )
         set ( GRAPHICS_SRC ${GRAPHICS_SRC} gfxGraphicsWindows.cpp )
 endif()
 
