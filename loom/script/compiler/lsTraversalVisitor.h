@@ -582,6 +582,7 @@ public:
         lastVisited = newExpression;
 
         newExpression->function  = visitExpression(newExpression->function);
+        newExpression->initializer = (DictionaryLiteral*)visitExpression((Expression*)newExpression->initializer);
         newExpression->arguments = visitExpressionArray(
             newExpression->arguments);
 

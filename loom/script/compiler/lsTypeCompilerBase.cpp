@@ -573,6 +573,45 @@ Expression *TypeCompilerBase::visit(NewExpression *expression)
         
         fs->freereg = restore;
     }
+    else if (expression->initializer != NULL)
+    {
+        for (UTsize i = 0; i < expression->initializer->pairs.size(); i++)
+        {
+            int restore = fs->freereg;
+            
+            DictionaryLiteralPair *pair = expression->initializer->pairs[i];
+            
+            utString& fieldName = ((StringLiteral*)pair->key)->string;
+            
+            Type* t = expression->function->type;
+            MemberInfo *mi = t->findMember(fieldName.c_str(), true);
+            
+            int ordinal = mi->getOrdinal();
+            
+            //Get the field info
+            ExpDesc vname;
+            lmAssert(ordinal, "Out of range ordinal");
+            BC::initExpDesc(&vname, VKNUM, 0);
+#ifdef LOOM_ENABLE_JIT
+            setnumV(&vname.u.nval, ordinal);
+#else
+            vname.u.nval = ordinal;
+#endif
+
+            ExpDesc vdest = e;
+            
+            BC::expToNextReg(fs, &vdest);
+            BC::expToNextReg(fs, &vname);
+            
+            BC::expToVal(fs, &vname);
+            BC::indexed(fs, &vdest, &vname);
+
+            Expression* rhs = pair->value->visitExpression(this);
+            BC::storeVar(fs, &vdest, &rhs->e);
+
+            fs->freereg = restore;
+        }
+    }
     
     expression->e = e;
     

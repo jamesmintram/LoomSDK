@@ -591,12 +591,14 @@ class NewExpression : public Expression {
 public:
 
     Expression            *function;
+    DictionaryLiteral     *initializer;
     utArray<Expression *> *arguments;
 
     NewExpression()
     {
-        function  = NULL;
-        arguments = NULL;
+        function    = NULL;
+        initializer = NULL;
+        arguments   = NULL;
 
         astType = AST_NEWEXPRESSION;
     }

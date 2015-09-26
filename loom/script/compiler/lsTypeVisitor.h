@@ -1737,6 +1737,30 @@ public:
             validateMethodBaseCall((MethodBase *)ci, expression->arguments);
         }
 
+        if (expression->initializer != NULL)
+        {
+            for (UTsize i = 0; i < expression->initializer->pairs.size(); i++)
+            {
+                DictionaryLiteralPair *pair = expression->initializer->pairs[i];
+                utString& fieldName = ((StringLiteral*)pair->key)->string;
+                
+                MemberInfo *mi = t->findMember(fieldName.c_str(), true);
+                if (mi == NULL)
+                {
+                    error("Field %s does not exist in type %s", fieldName.c_str(), t->getFullName().c_str());
+                }
+                else
+                {
+                    // Type check that the assignment is valid
+                    Identifier temp("");
+                    temp.type = mi->getType();
+                    AssignmentExpression checkAssign(&temp, pair->value);
+                    
+                    visit(&checkAssign);
+                }
+            }
+        }
+        
         return expression;
     }
 

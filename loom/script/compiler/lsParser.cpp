@@ -972,9 +972,10 @@ Expression *Parser::parseMemberExpression(bool newFlag)
     {
         readToken(LSTOKEN(KEYWORD_NEW));
 
-        bool       isVector = false, isDictionary = false;
-        Expression *name    = NULL;
-        Identifier *iname   = NULL;
+        bool       isVector     = false, isDictionary = false;
+        Expression *name        = NULL;
+        Expression *initializer = NULL;
+        Identifier *iname       = NULL;
 
         if ((nextToken->value == "Vector") || (nextToken->value == "Dictionary"))
         {
@@ -1059,7 +1060,20 @@ Expression *Parser::parseMemberExpression(bool newFlag)
             {
                 n->arguments = new utArray<Expression *>();
             }
+            
             parseArgumentList(n->arguments);
+            
+            //Support for initializer dicts
+            if (nextToken == LSTOKEN(OPERATOR_OPENBRACE))
+            {
+                iname    = new Identifier("Vector");
+                iname->astTemplateInfo = ASTTemplateTypeInfo::createDictionaryInfo("system.String", "system.Object");
+                DictionaryLiteral* initializer = static_cast<DictionaryLiteral*>(
+                                                    parseDictionaryLiteral(
+                                                        iname->astTemplateInfo->templateTypes[0]->typeString,
+                                                        iname->astTemplateInfo->templateTypes[1]->typeString));
+                n->initializer = initializer;
+            }
         }
     }
     else if (nextToken == LSTOKEN(KEYWORD_FUNCTION))
