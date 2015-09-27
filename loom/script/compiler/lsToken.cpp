@@ -131,6 +131,7 @@ Tokens::Tokens()
     KEYWORD_IF.initKeyword("if");
     KEYWORD_FOR.initKeyword("for");
     KEYWORD_IN.initKeyword("in");
+    KEYWORD_LET.initKeyword("let");
     KEYWORD_NEW.initKeyword("new");
     KEYWORD_NULL.initKeyword("null");
     KEYWORD_RETURN.initKeyword("return");

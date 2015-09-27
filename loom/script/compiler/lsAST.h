@@ -949,6 +949,7 @@ public:
     bool isParameter;
     bool isTemplate;
     bool isConst;
+    bool isLet;
 
     // this variable will be implicitly typed based on assignment
     bool assignType;
@@ -967,7 +968,7 @@ public:
                         bool _isPublic, bool _isProtected, bool _isStatic, bool _isNative) :
         defaultInitializer(false), function(NULL), classDecl(NULL),
         isPublic(_isPublic), isProtected(_isProtected), isStatic(_isStatic), isNative(_isNative),
-        isVarArg(false), isParameter(false), isTemplate(false), isConst(false)
+        isVarArg(false), isParameter(false), isTemplate(false), isConst(false), isLet(false)
     {
         astType           = AST_VARDECL;
         this->identifier  = identifier;

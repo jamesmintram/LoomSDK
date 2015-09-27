@@ -214,6 +214,7 @@ public:
     Token KEYWORD_FUNCTION;
     Token KEYWORD_IF;
     Token KEYWORD_IN;
+    Token KEYWORD_LET;
     Token KEYWORD_NEW;
     Token KEYWORD_NULL;
     Token KEYWORD_RETURN;

@@ -2280,17 +2280,23 @@ Statement *Parser::parseVariableStatement()
     utArray<VariableDeclaration *> *decls = new utArray<VariableDeclaration *>();
 
     bool isConst = false;
+    bool isLet = false;
     if (nextToken == LSTOKEN(KEYWORD_CONST))
     {
         isConst = true;
     }
-
+    if (nextToken == LSTOKEN(KEYWORD_LET))
+    {
+        isLet = true;
+    }
+    
     // KEYWORD_VAR or KEYWORD_CONST
     readToken();
 
     // there must be at least one variable declaration
     decls->push_back(parseVariableDeclaration(true));
     decls->back()->isConst = isConst;
+    decls->back()->isLet = isLet;
 
     while (nextToken == LSTOKEN(OPERATOR_COMMA))
     {
@@ -3033,7 +3039,8 @@ Statement *Parser::parseStatement()
         skipSemiColon = true;
     }
     else if ((nextToken == LSTOKEN(KEYWORD_VAR)) ||
-             (nextToken == LSTOKEN(KEYWORD_CONST)))
+             (nextToken == LSTOKEN(KEYWORD_CONST)) ||
+             (nextToken == LSTOKEN(KEYWORD_LET)))
     {
         statement = parseVariableStatement();
     }
