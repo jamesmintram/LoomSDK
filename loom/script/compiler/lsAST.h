@@ -338,7 +338,8 @@ public:
 class BlockStatement : public Statement {
 public:
     utArray<Statement *> *statements;
-
+    utArray<VariableDeclaration *> localVariables;
+    
     BlockStatement() :
         statements(NULL)
     {

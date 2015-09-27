@@ -36,16 +36,28 @@ private:
     PackageDeclaration *curPackage;
     ClassDeclaration   *curClass;
     FunctionLiteral    *curFunction;
+    BlockStatement     *curBlock;
     CompilationUnit    *cunit;
 
 public:
 
     DeclarationVisitor() :
-        TraversalVisitor(), curPackage(NULL), curClass(NULL), curFunction(NULL), cunit(NULL)
+        TraversalVisitor(), curPackage(NULL), curClass(NULL), curFunction(NULL), curBlock(NULL), cunit(NULL)
     {
         visitor = this;
     }
 
+    Statement *visit(BlockStatement *cblock)
+    {
+        BlockStatement* restore = curBlock;
+        this->curBlock = cblock;
+        
+        Statement* returnStatement = TraversalVisitor::visit(cblock);
+        
+        this->curBlock = restore;
+        return returnStatement;
+    }
+    
     CompilationUnit *visit(CompilationUnit *cunit)
     {
         this->cunit = cunit;
@@ -169,8 +181,13 @@ public:
                 curClass->varDecls.push_back(v);
             }
         }
+        else if (curBlock != NULL && v->isLet)
+        {
+            curBlock->localVariables.push_back(v);
+        }
         else
         {
+            //Default to function scope if we are not a let statement in a block scope
             curFunction->localVariables.push_back(v);
         }
 

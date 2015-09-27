@@ -141,6 +141,66 @@ public:
         push(scope);
     }
 
+    static void push(BlockStatement *blockStatement)
+    {
+        //TODO: improve/reinstate error handling
+        Scope *scope = new Scope();
+        
+        for (UTsize i = 0; i < blockStatement->localVariables.size(); i++)
+        {
+            VariableDeclaration *vd   = blockStatement->localVariables.at(i);
+            Type                *type = resolveType(vd->typeString);
+            
+            if (!type)
+            {
+                char errormsg[1024];
+                sprintf(errormsg,
+                        "unable to resolve type %s for local var %s:%s in function %s:%s",
+                        vd->typeString.c_str(), vd->identifier->string.c_str(),
+                        vd->typeString.c_str());
+                
+                //LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
+            }
+            
+            utHashedString hs = vd->identifier->string;
+            
+            if ((scope->locals.get(hs) != NULL) || (scope->localVars.get(hs) != NULL))
+            {
+                int conflict = -1;
+                VariableDeclaration **cvd = scope->localVars.get(hs);
+                if (cvd)
+                {
+                    conflict = (*cvd)->lineNumber;
+                }
+                
+                // print line information if we have it
+                if (conflict != -1)
+                {
+                    char errormsg[1024];
+                    sprintf(errormsg,
+                            "duplicate local variable definition \"%s\" in function",
+                            vd->identifier->string.c_str());
+                    
+                    //LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
+                }
+                else
+                {
+                    char errormsg[1024];
+                    sprintf(errormsg,
+                            "duplicate local variable definition \"%s\" in function",
+                            vd->identifier->string.c_str());
+                    
+                    //LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
+                }
+            }
+            
+            scope->locals.insert(vd->identifier->string, type);
+        }
+
+        push(scope);
+    }
+
+    
     static void push(Type *type)
     {
         Scope *scope = new Scope();

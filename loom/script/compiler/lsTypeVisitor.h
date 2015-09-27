@@ -223,6 +223,17 @@ public:
         return statement;
     }
 
+    Statement *visit(BlockStatement *blockStatement)
+    {
+        Scope::push(blockStatement);
+        
+        Statement* returnStatement = TraversalVisitor::visit(blockStatement);
+        
+        Scope::pop();
+
+        return returnStatement;
+    }
+    
     PackageDeclaration *visit(PackageDeclaration *pkg)
     {
         PackageDeclaration *oldPackage = curPackage;

@@ -2303,6 +2303,7 @@ Statement *Parser::parseVariableStatement()
         readToken(LSTOKEN(OPERATOR_COMMA));
         decls->push_back(parseVariableDeclaration(true));
         decls->back()->isConst = isConst;
+        decls->back()->isLet = isLet;
     }
 
     return new VariableStatement(decls);
