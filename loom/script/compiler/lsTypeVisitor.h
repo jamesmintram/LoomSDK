@@ -1749,6 +1749,10 @@ public:
                 {
                     error("Field %s does not exist in type %s", fieldName.c_str(), t->getFullName().c_str());
                 }
+                else if(!mi->isField() || !mi->isPublic())
+                {
+                    error("Field %s is not a public field in type %s", fieldName.c_str(), t->getFullName().c_str());
+                }
                 else
                 {
                     // Type check that the assignment is valid
