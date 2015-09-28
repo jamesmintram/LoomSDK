@@ -141,8 +141,16 @@ public:
         push(scope);
     }
 
-    static void push(BlockStatement *blockStatement)
+    static void push(BlockStatement *blockStatement, CompilationUnit *cunit = NULL)
     {
+        utString source = "(Unknown Source File)";
+        
+        if (cunit)
+        {
+            source = cunit->filename;
+        }
+
+        
         //TODO: improve/reinstate error handling
         Scope *scope = new Scope();
         
@@ -159,7 +167,7 @@ public:
                         vd->typeString.c_str(), vd->identifier->string.c_str(),
                         vd->typeString.c_str());
                 
-                //LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
+                LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
             }
             
             utHashedString hs = vd->identifier->string;
@@ -181,7 +189,7 @@ public:
                             "duplicate local variable definition \"%s\" in function",
                             vd->identifier->string.c_str());
                     
-                    //LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
+                    LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
                 }
                 else
                 {
@@ -190,11 +198,12 @@ public:
                             "duplicate local variable definition \"%s\" in function",
                             vd->identifier->string.c_str());
                     
-                    //LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
+                    LSCompilerLog::logError(source.c_str(), vd->lineNumber, errormsg, "Scope");
                 }
             }
             
             scope->locals.insert(vd->identifier->string, type);
+            scope->localVars.insert(vd->identifier->string, vd);
         }
 
         push(scope);
