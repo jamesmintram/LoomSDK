@@ -135,7 +135,7 @@ private:
     FunctionLiteral *parseFunctionLiteral(bool nameFlag);
     Statement *parseFunctionDeclaration();
     Statement *parsePropertyDeclaration();
-    VariableDeclaration *parseVariableDeclaration(bool inFlag, bool inFunctionParameters = false);
+    VariableDeclaration *parseVariableDeclaration(bool inFlag, bool inFunctionParameters = false, bool isLet = false);
     VariableDeclaration *parseVarArgDeclaration(bool inFlag);
 
     Statement *parseImportStatement();

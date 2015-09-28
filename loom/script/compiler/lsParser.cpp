@@ -1799,7 +1799,8 @@ Statement *Parser::parseDoStatement()
 
 
 VariableDeclaration *Parser::parseVariableDeclaration(bool inFlag,
-                                                      bool inFunctionParameters)
+                                                      bool inFunctionParameters,
+                                                      bool isLet)
 {
 
     if (!curClass)
@@ -1918,7 +1919,8 @@ VariableDeclaration *Parser::parseVariableDeclaration(bool inFlag,
     vd->defaultInitializer = defaultInitializer;
     vd->isParameter        = inFunctionParameters;
     vd->lineNumber         = lexer.lineNumber;
-
+    vd->isLet = isLet;
+    
     if (!typeString.size())
     {
         vd->assignType = true;
@@ -1969,13 +1971,15 @@ Statement *Parser::parseForStatement()
     readToken(LSTOKEN(OPERATOR_OPENPAREN));
 
     int state = 0;
+    bool isLet = false;
     while (statement == NULL)
     {
         switch (state)
         {
         case 0:
             // initial state
-            if (nextToken == LSTOKEN(KEYWORD_VAR))
+            if (nextToken == LSTOKEN(KEYWORD_VAR) ||
+                nextToken == LSTOKEN(KEYWORD_LET))
             {
                 state = 1;
             }
@@ -1991,8 +1995,11 @@ Statement *Parser::parseForStatement()
 
         case 1:
             // 'for' '(' 'var'
-            readToken(LSTOKEN(KEYWORD_VAR));
-            declaration = parseVariableDeclaration(false);
+            isLet = (nextToken == LSTOKEN(KEYWORD_LET));
+                
+            readToken();
+            declaration = parseVariableDeclaration(false, false, isLet);
+                
             if (nextToken == LSTOKEN(KEYWORD_IN))
             {
                 variable = declaration;
@@ -2077,7 +2084,13 @@ Statement *Parser::parseForStatement()
         }
     }
 
-    return statement;
+    //Wrap the for loop into an implicit block to scope any let statements
+    BlockStatement* wrapBlock = new BlockStatement();
+    
+    wrapBlock->statements = new utArray<Statement *>();
+    wrapBlock->statements->push_back(statement);
+    
+    return wrapBlock;
 }
 
 
